@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            border: 4px solid #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background-color: #70c5ce;
+        }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+let gameStarted = false;
+let score = 0;
+let highscore = localStorage.getItem("highscore") ? parseInt(localStorage.getItem("highscore")) : 0;
+
+const bird = {
+    x: 50,
+    y: 300,
+    radius: 14,
+    gravity: 0.4,
+    velocity: 0,
+    jump: -6.5,
+    draw: function() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#ff4444";
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.closePath();
+
+        ctx.beginPath();
+        ctx.arc(this.x + 6, this.y - 4, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+        ctx.closePath();
+
+        ctx.beginPath();
+        ctx.arc(this.x + 7, this.y - 4, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#000";
+        ctx.fill();
+        ctx.closePath();
+    }
+};
+
+const pipes = [];
+const pipeWidth = 60;
+const pipeSpeed = 2;
+// Celah setara 2.8 kali ukuran/diameter karakter burung (bird.radius * 2 * 2.8)
+const pipeGap = bird.radius * 2 * 2.8; 
+
+function spawnPipe() {
+    const minHeight = 50;
+    const maxHeight = canvas.height - pipeGap - minHeight;
+    const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+    pipes.push({
+        x: canvas.width,
+        top: topHeight,
+        passed: false
+    });
+}
+
+function resetGame() {
+    score = 0;
+    bird.y = 300;
+    bird.velocity = 0;
+    pipes.length = 0;
+    gameStarted = false;
+}
+
+function handleControl() {
+    if (!gameStarted) {
+        gameStarted = true;
+    }
+    bird.velocity = bird.jump;
+}
+
+window.addEventListener("keydown", function(e) {
+    if (e.code === "Space") handleControl();
+});
+
+canvas.addEventListener("touchstart", function(e) {
+    e.preventDefault();
+    handleControl();
+});
+
+canvas.addEventListener("mousedown", handleControl);
+
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Background
+    ctx.fillStyle = "#70c5ce";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Clouds
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(100, 80, 30, 0, Math.PI * 2);
+    ctx.arc(140, 70, 40, 0, Math.PI * 2);
+    ctx.arc(180, 80, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.closePath();
+
+    if (gameStarted) {
+        bird.velocity += bird.gravity;
+        bird.y += bird.velocity;
+
+        if (bird.y + bird.radius >= canvas.height || bird.y - bird.radius <= 0) {
+            resetGame();
+        }
+
+        if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) {
+            spawnPipe();
+        }
+
+        for (let i = pipes.length - 1; i >= 0; i--) {
+            pipes[i].x -= pipeSpeed;
+
+            const bottomPipeY = pipes[i].top + pipeGap;
+            const bottomPipeHeight = canvas.height - bottomPipeY;
+
+            // Draw Top Pipe
+            ctx.fillStyle = "#73bf2e";
+            ctx.fillRect(pipes[i].x, 0, pipeWidth, pipes[i].top);
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(pipes[i].x, 0, pipeWidth, pipes[i].top);
+
+            // Draw Bottom Pipe
+            ctx.fillRect(pipes[i].x, bottomPipeY, pipeWidth, bottomPipeHeight);
+            ctx.strokeRect(pipes[i].x, bottomPipeY, pipeWidth, bottomPipeHeight);
+
+            // Collision check
+            if (
+                bird.x + bird.radius > pipes[i].x &&
+                bird.x - bird.radius < pipes[i].x + pipeWidth
+            ) {
+                if (bird.y - bird.radius < pipes[i].top || bird.y + bird.radius > bottomPipeY) {
+                    resetGame();
+                    break;
+                }
+            }
+
+            // Score check
+            if (!pipes[i].passed && pipes[i].x + pipeWidth < bird.x) {
+                pipes[i].passed = true;
+                score++;
+                if (score > highscore) {
+                    highscore = score;
+                    localStorage.setItem("highscore", highscore);
+                }
+            }
+
+            // Remove offscreen pipes
+            if (pipes[i].x + pipeWidth < 0) {
+                pipes.splice(i, 1);
+            }
+        }
+    } else {
+        ctx.fillStyle = "#fff";
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Tekan Layar/Spasi untuk Mulai", canvas.width / 2, canvas.height / 2);
+    }
+
+    bird.draw();
+
+    // Score UI
+    ctx.fillStyle = "#fff";
+    ctx.lineWidth = 4;
+    ctx.font = "bold 30px Arial";
+    ctx.textAlign = "center";
+    ctx.strokeStyle = "#000";
+    ctx.strokeText(score, canvas.width / 2, 50);
+    ctx.fillText(score, canvas.width / 2, 50);
+
+    if (highscore > 0) {
+        ctx.font = "bold 16px Arial";
+        ctx.strokeText("Highscore: " + highscore, canvas.width / 2, 85);
+        ctx.fillText("Highscore: " + highscore, canvas.width / 2, 85);
+    }
+
+    requestAnimationFrame(update);
+}
+
+update();
+</script>
+</body>
+</html>
